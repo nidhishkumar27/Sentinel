@@ -1,0 +1,9 @@
+{
+  "name": "TRV-01 Sentinel",
+  "description": "A smart tourist safety monitoring and incident response system featuring AI hazard detection, real-time tracking, and blockchain-verified identity.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
