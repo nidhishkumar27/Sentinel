@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, LocateFixed } from 'lucide-react'; // Added LocateFixed
-import { WeatherService } from '../services/weather'; // Added WeatherService
+import { Search, MapPin, LocateFixed } from 'lucide-react';
 
 interface LocationPromptProps {
     onSubmit: (location: { name: string; lat: number; lng: number }) => void;
@@ -50,29 +49,35 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({ onSubmit }) => {
             return;
         }
 
+        // 1. Pre-fetch IP location immediately for speed (Race Preparation)
+        const ipLocPromise = fetch('https://ipapi.co/json/')
+            .then(res => res.json())
+            .catch(err => null);
+
+        const options = {
+            enableHighAccuracy: false, // Use wifi/cell towers for speed
+            timeout: 5000, // Hard limit of 5s for GPS
+            maximumAge: 60000
+        };
+
         navigator.geolocation.getCurrentPosition(async (position) => {
             try {
                 const { latitude, longitude } = position.coords;
-                // Use WeatherService (Visual Crossing) for Reverse Geocoding
-                const weatherData = await WeatherService.getWeather({ lat: latitude, lng: longitude });
 
-                if (weatherData && weatherData.address) {
-                    // Visual Crossing often returns "City, State, Country" or similar. 
-                    // We'll use the first part or the full address string as the name.
-                    // The 'address' field in response is usually what we queried, 
-                    // but 'resolvedAddress' is the full name. 
-                    // WeatherService returns the full JSON, so let's check what we mapped.
-                    // Actually WeatherData interface has 'address'. 
-                    // Let's assume it holds a displayable name or we use a fallback.
-                    const cityName = weatherData.address.split(',')[0];
+                // Use OpenStreetMap Nominatim for Reverse Geocoding
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                const data = await response.json();
+
+                if (data && data.address) {
+                    const { city, town, village, suburb, county } = data.address;
+                    const detectedName = city || town || village || suburb || county || "Unknown Location";
 
                     onSubmit({
-                        name: cityName,
+                        name: detectedName,
                         lat: latitude,
                         lng: longitude
                     });
                 } else {
-                    // Fallback if API fails to resolve name but we have coords
                     onSubmit({
                         name: `Location (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`,
                         lat: latitude,
@@ -85,11 +90,52 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({ onSubmit }) => {
             } finally {
                 setLoading(false);
             }
-        }, (err) => {
-            console.error("Geolocation error", err);
-            setError('Unable to retrieve your location. Please check permissions.');
+        }, async (err) => {
+            console.warn("Geolocation failing/slow, switching to IP fallback...", err);
+
+            try {
+                // 2. Use the pre-fetched promise
+                const data = await ipLocPromise;
+
+                if (data && data.latitude && data.longitude) {
+                    onSubmit({
+                        name: data.city || data.region || data.country_name,
+                        lat: data.latitude,
+                        lng: data.longitude
+                    });
+                } else {
+                    // If pre-fetch failed, try again or error
+                    throw new Error("IP Pre-fetch failed");
+                }
+            } catch (fallbackErr) {
+                console.error("Fallback failed", fallbackErr);
+                detectLocationByIP(); // Try fresh fetch as last resort
+            } finally {
+                setLoading(false);
+            }
+        }, options);
+    };
+
+    const detectLocationByIP = async () => {
+        try {
+            const response = await fetch('https://ipapi.co/json/');
+            const data = await response.json();
+
+            if (data && data.latitude && data.longitude) {
+                onSubmit({
+                    name: data.city || data.region || data.country_name,
+                    lat: data.latitude,
+                    lng: data.longitude
+                });
+            } else {
+                throw new Error("Invalid IP location data");
+            }
+        } catch (ipErr) {
+            console.error("IP Fallback failed", ipErr);
+            setError('Unable to retrieve your location. Please type your city manually.');
+        } finally {
             setLoading(false);
-        });
+        }
     };
 
     return (

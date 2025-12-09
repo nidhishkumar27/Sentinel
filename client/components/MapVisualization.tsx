@@ -26,6 +26,7 @@ interface MapVisualizationProps {
   markerLabel?: string;
   scannedZones?: any[];
   scannedSpots?: any[];
+  onInactivityAlert?: () => void;
 }
 
 // Helper: Calculate distance in meters between two coordinates
@@ -48,6 +49,17 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
 // Fixed to prevent resetting zoom on every render
 // Component to handle map center updates
 // Fixed to prevent resetting zoom on every render
+const ResizeHandler = () => {
+  const map = useMap();
+  useEffect(() => {
+    // Invalidate size after mount to fix grey tiles in tabs/modals
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+  }, [map]);
+  return null;
+};
+
 const MapUpdater: React.FC<{ center: [number, number]; zoom?: number }> = ({ center, zoom = 13 }) => {
   const map = useMap();
   const prevCenter = useRef<string>("");
@@ -63,7 +75,7 @@ const MapUpdater: React.FC<{ center: [number, number]; zoom?: number }> = ({ cen
   return null;
 };
 
-export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation, alerts, cityLocation, scannedZones, scannedSpots, zoom = 13, markerLabel = "You are here" }) => {
+export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation, alerts, cityLocation, scannedZones, scannedSpots, zoom = 13, markerLabel = "You are here", onInactivityAlert }) => {
 
   // Default to user location or generic fallback (Mysore) if nothing provided
   const centerPosition: [number, number] = cityLocation
@@ -76,35 +88,95 @@ export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation
     { name: "Public Gardens", lat: cityLocation.lat - 0.003, lng: cityLocation.lng + 0.004 },
   ] : []);
 
-  const dangerZones = scannedZones && scannedZones.length > 0 ? scannedZones : (cityLocation ? [
-    { name: "Simulated Hazard A", lat: cityLocation.lat - 0.005, lng: cityLocation.lng - 0.005, radius: 400 },
-  ] : []);
+  // Combine Scanned Zones with Active High-Risk Alerts
+  // Combine Scanned Zones with Active High-Risk Alerts
+  const dangerZones = React.useMemo(() => {
+    const activeAlertZones = alerts
+      .filter(a => (a.type === 'HARASSMENT' || a.type === 'LOST') && a.status !== 'RESOLVED')
+      .map(a => ({
+        name: `${a.type} reported in this area`,
+        lat: a.location.x,
+        lng: a.location.y,
+        radius: 300,
+        reason: "Live Incident Report"
+      }));
+
+    return [
+      ...(scannedZones && scannedZones.length > 0 ? scannedZones : (cityLocation ? [
+        { name: "Simulated Hazard A", lat: cityLocation.lat - 0.005, lng: cityLocation.lng - 0.005, radius: 400 },
+      ] : [])),
+      ...activeAlertZones
+    ];
+  }, [alerts, scannedZones, cityLocation]);
+
+  // Vulnerable Zones (Resolved Harassment/Lost)
+  const vulnerableZones = alerts
+    .filter(a => (a.type === 'HARASSMENT' || a.type === 'LOST') && a.status === 'RESOLVED')
+    .map(a => ({
+      name: `Past ${a.type} Incident (Vulnerable)`,
+      lat: a.location.x,
+      lng: a.location.y,
+      radius: 300,
+      reason: "Recently Resolved Incident"
+    }));
 
   // Dynamic User Movement Simulation
   const [dynamicPos, setDynamicPos] = useState<[number, number]>(centerPosition);
   const [escapeRoute, setEscapeRoute] = useState<[number, number][] | null>(null);
 
+  // Simulation State
+  const simState = useRef<'MOVING' | 'STATIC'>('MOVING'); // Start moving
+  const simTimer = useRef<number>(0);
+
   // Sync dynamicPos with centerPosition when city changes
   useEffect(() => {
     setDynamicPos(centerPosition);
+    simTimer.current = 0;
+    simState.current = 'MOVING';
   }, [centerPosition[0], centerPosition[1]]);
 
   // Simulate Walking & Safety Check
   useEffect(() => {
     const interval = setInterval(() => {
       setDynamicPos(prev => {
-        // Simple random walk: move ~5-10 meters
-        const deltaLat = (Math.random() - 0.5) * 0.0002;
-        const deltaLng = (Math.random() - 0.5) * 0.0002;
-        const newPos: [number, number] = [prev[0] + deltaLat, prev[1] + deltaLng];
+        let newPos = prev;
+        simTimer.current += 1; // Increment timer (1s)
+
+        // STATE MACHINE: 30s Moving -> 10s Static -> Alert -> Reset
+        if (simState.current === 'MOVING') {
+          // Move
+          const deltaLat = (Math.random() - 0.5) * 0.0002;
+          const deltaLng = (Math.random() - 0.5) * 0.0002;
+          newPos = [prev[0] + deltaLat, prev[1] + deltaLng];
+
+          // Transition check
+          if (simTimer.current >= 30) {
+            simState.current = 'STATIC';
+            simTimer.current = 0;
+            console.log("Sim: Switching to STATIC mode");
+          }
+        } else if (simState.current === 'STATIC') {
+          // Don't move (newPos = prev)
+
+          // Transition check
+          if (simTimer.current >= 10) {
+            // TRIGGER ALERT
+            if (onInactivityAlert) onInactivityAlert();
+
+            // Resume moving
+            simState.current = 'MOVING';
+            simTimer.current = 0;
+            console.log("Sim: Alert Triggered! Resuming movement.");
+          }
+        }
 
         // Check Safety
         let inDanger = false;
         let nearestSafeSpot = null;
         let minSafeDist = Infinity;
 
-        // 1. Am I in danger?
-        for (const zone of dangerZones) {
+        // 1. Am I in danger or vulnerable zone?
+        for (const zone of [...dangerZones, ...vulnerableZones]) {
           const dist = getDistanceMeters(newPos[0], newPos[1], zone.lat, zone.lng);
           if (dist < zone.radius) {
             inDanger = true;
@@ -133,8 +205,10 @@ export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation
       });
     }, 1000); // Move every second
 
+
+
     return () => clearInterval(interval);
-  }, [dangerZones, touristSpots]);
+  }, [dangerZones, touristSpots, onInactivityAlert]);
 
   return (
     <div className="relative w-full h-full bg-slate-900 overflow-hidden rounded-xl border border-slate-700 shadow-inner z-0">
@@ -153,6 +227,7 @@ export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation
         />
 
         <MapUpdater center={centerPosition} zoom={zoom} />
+        <ResizeHandler />
 
         {/* Escape Route Line */}
         {escapeRoute && (
@@ -185,6 +260,20 @@ export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation
           </Circle>
         ))}
 
+        {vulnerableZones.map((zone, idx) => (
+          <Circle
+            key={`vuln-zone-${idx}`}
+            center={[zone.lat, zone.lng]}
+            radius={zone.radius}
+            pathOptions={{ color: '#eab308', fillColor: '#eab308', fillOpacity: 0.2, dashArray: '5, 10' }}
+          >
+            <Popup>
+              <div className="text-yellow-500 font-bold">⚠️ {zone.name}</div>
+              <div className="text-xs text-slate-500">Vulnerable Area. Please proceed with caution.</div>
+            </Popup>
+          </Circle>
+        ))}
+
         {/* User Location (Live Blue Dot) */}
         <Circle
           center={dynamicPos}
@@ -199,7 +288,12 @@ export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation
           <Popup autoClose={false} closeOnClick={false}>
             <div className={`${escapeRoute ? 'text-red-600' : 'text-blue-600'} font-bold text-center`}>
               {escapeRoute ? '⚠️ IN DANGER ZONE' : markerLabel}<br />
-              <span className="text-xs text-slate-500 animate-pulse">{escapeRoute ? 'Follow line to safety!' : '(Moving...)'}</span>
+              {escapeRoute ? '⚠️ IN DANGER ZONE' : markerLabel}<br />
+              <span className="text-xs text-slate-500 animate-pulse">
+                {escapeRoute ? 'Follow line to safety!' :
+                  (simState.current === 'STATIC' ? `(Static: ${simTimer.current}s)` : '(Moving...)')
+                }
+              </span>
             </div>
           </Popup>
         </Circle>
@@ -258,6 +352,10 @@ export const MapVisualization: React.FC<MapVisualizationProps> = ({ userLocation
         <div className="flex items-center space-x-2">
           <span className="w-3 h-3 rounded-full bg-red-500/50 border border-red-500"></span>
           <span className="text-slate-300">Risk Zone</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="w-3 h-3 rounded-full bg-yellow-500/50 border border-yellow-500 dashed border-dashed"></span>
+          <span className="text-slate-300">Vulnerable Zone</span>
         </div>
       </div>
 

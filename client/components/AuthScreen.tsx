@@ -18,6 +18,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
 
   // Tourist Fields
   const [name, setName] = useState('');
+  const [passportNumber, setPassportNumber] = useState('');
+  const [nationality, setNationality] = useState('');
 
   // Agency Fields
   const [agencyName, setAgencyName] = useState('');
@@ -47,8 +49,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
     try {
       let response;
       if (isRegistering) {
+        const validUntil = Date.now() + (365 * 24 * 60 * 60 * 1000); // 1 Year Validity
         const payload = role === 'TOURIST'
-          ? { username, password, name, role }
+          ? { username, password, name, role, passportNumber, nationality, validUntil }
           : {
             username, password, role: 'AUTHORITY',
             name: agencyName, // Agency Name as main name
@@ -207,10 +210,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
               {(!isRegistering || role === 'TOURIST') && (
                 <>
                   {isRegistering && (
-                    <div className="relative">
-                      <User className="absolute left-3 top-3.5 text-slate-500 w-5 h-5" />
-                      <input type="text" placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-brand-900 border border-slate-600 rounded-xl py-3 pl-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-accent" required />
-                    </div>
+                    <>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3.5 text-slate-500 w-5 h-5" />
+                        <input type="text" placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-brand-900 border border-slate-600 rounded-xl py-3 pl-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-accent" required />
+                      </div>
+                      <div className="relative mt-2">
+                        <BadgeCheck className="absolute left-3 top-3.5 text-slate-500 w-5 h-5" />
+                        <input type="text" placeholder="Passport Number" value={passportNumber} onChange={(e) => setPassportNumber(e.target.value)} className="w-full bg-brand-900 border border-slate-600 rounded-xl py-3 pl-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-accent" required />
+                      </div>
+                      <div className="relative mt-2">
+                        <MapPin className="absolute left-3 top-3.5 text-slate-500 w-5 h-5" />
+                        <input type="text" placeholder="Nationality" value={nationality} onChange={(e) => setNationality(e.target.value)} className="w-full bg-brand-900 border border-slate-600 rounded-xl py-3 pl-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-accent" required />
+                      </div>
+                    </>
                   )}
                 </>
               )}
@@ -245,6 +258,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 };

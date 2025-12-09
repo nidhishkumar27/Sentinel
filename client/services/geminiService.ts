@@ -21,7 +21,7 @@ export const scanCity = async (cityName: string): Promise<CityIntel> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp', // Using a faster/smarter model if available, or fall back to standard
+      model: 'gemini-2.5-flash',
       contents: `Generate a safety map data for "${cityName}".
       1. Identify 3 real, popular tourist spots (museums, palaces, parks).
       2. Identify 3 hypothetical or known "cautionary zones" (e.g., busy intersections, isolated parks at night, construction areas).
@@ -126,7 +126,8 @@ export const analyzeRisk = async (context: string): Promise<RiskAssessment> => {
     throw new Error("No response text");
 
   } catch (error) {
-    console.error("Gemini Analysis Failed:", error);
+    console.error("Gemini Analysis Failed. Details:", JSON.stringify(error, null, 2));
+    if (error instanceof Error) console.error(error.message);
     return {
       score: 50,
       level: RiskLevel.MEDIUM,

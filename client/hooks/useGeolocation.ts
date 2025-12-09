@@ -82,7 +82,17 @@ export const useGeolocation = (initialLocation: Coordinate = DEFAULT_LOCATION) =
                 }
             }));
         }, 2000);
-        return () => clearInterval(interval);
+
+        // Stop simulation after 30 seconds for demo purposes
+        const timeout = setTimeout(() => {
+            clearInterval(interval);
+            console.log("Simulation stopped for inactivity demo");
+        }, 30000);
+
+        return () => {
+            clearInterval(interval);
+            clearTimeout(timeout);
+        };
     }, []);
 
     return state;

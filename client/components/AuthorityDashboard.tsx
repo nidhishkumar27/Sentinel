@@ -11,23 +11,66 @@ interface AuthorityDashboardProps {
     onLogout: () => void;
 }
 
-const MOCK_STATS = [
-    { name: '00:00', risk: 10 },
-    { name: '04:00', risk: 5 },
-    { name: '08:00', risk: 35 },
-    { name: '12:00', risk: 45 },
-    { name: '16:00', risk: 30 },
-    { name: '20:00', risk: 65 },
-    { name: '24:00', risk: 40 },
-];
+
 
 export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({ alerts, userLocation, onLogout }) => {
     const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
     const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
     const selectedAlert = alerts.find(a => a.id === selectedAlertId);
 
-    const pendingAlerts = alerts.filter(a => a.status === 'PENDING');
+    const getPriorityScore = (type: string) => {
+        switch (type) {
+            case 'MEDICAL': return 3;
+            case 'PANIC': return 2;
+            case 'HARASSMENT': return 2;
+            case 'LOST': return 1;
+            default: return 0;
+        }
+    };
+
+    // Sort by Priority (Descending) then Time (Ascending - oldest first for fairness within same priority)
+    const pendingAlerts = alerts
+        .filter(a => a.status === 'PENDING')
+        .sort((a, b) => {
+            const priorityDiff = getPriorityScore(b.type) - getPriorityScore(a.type);
+            if (priorityDiff !== 0) return priorityDiff;
+            return a.timestamp - b.timestamp;
+        });
+
     const activeAlerts = alerts.filter(a => a.status === 'IN_PROGRESS');
+
+    // Generate Real Stats for Chart
+    const generateStats = () => {
+        if (alerts.length === 0) return [];
+
+        const now = Date.now();
+        const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+
+        // Create 6 buckets of 4 hours
+        const stats = [];
+        for (let i = 0; i <= 6; i++) {
+            const timePoint = twentyFourHoursAgo + (i * 4 * 60 * 60 * 1000);
+            const date = new Date(timePoint);
+            const label = date.getHours().toString().padStart(2, '0') + ':00';
+
+            // Count cumulative totals up to this timePoint
+            const requestedCount = alerts.filter(a => a.timestamp <= timePoint).length;
+            const resolvedCount = alerts.filter(a => {
+                // Find if it was resolved before this timePoint
+                const resolutionEvent = a.timeline?.find(e => e.status === 'RESOLVED');
+                return resolutionEvent && resolutionEvent.timestamp <= timePoint;
+            }).length;
+
+            stats.push({
+                name: label,
+                requested: requestedCount,
+                resolved: resolvedCount
+            });
+        }
+        return stats;
+    };
+
+    const realStats = generateStats();
 
     const handleOpenDispatch = () => {
         setDispatchModalOpen(true);
@@ -240,15 +283,24 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({ alerts, 
                                 <h3 className="text-xs font-bold text-slate-400 uppercase mb-4">System Stats</h3>
                                 <div className="h-40 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={MOCK_STATS}>
+                                        <AreaChart data={realStats}>
                                             <defs>
-                                                <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                                                <linearGradient id="colorReq" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                                                </linearGradient>
+                                                <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                                 </linearGradient>
                                             </defs>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                            <Area type="monotone" dataKey="risk" stroke="#ef4444" fillOpacity={1} fill="url(#colorRisk)" />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                                                itemStyle={{ fontSize: '12px' }}
+                                            />
+                                            <Area type="monotone" dataKey="requested" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorReq)" name="Total Requested" strokeWidth={2} />
+                                            <Area type="monotone" dataKey="resolved" stroke="#10b981" fillOpacity={1} fill="url(#colorRes)" name="Cases Resolved" strokeWidth={2} />
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>

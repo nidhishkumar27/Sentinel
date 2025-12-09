@@ -17,6 +17,8 @@ export interface UserProfile {
   passportNumber: string; // Masked in UI
   verificationHash: string;
   photoUrl: string;
+  role?: string;
+  validUntil?: number;
 }
 
 export interface IncidentAlert {

@@ -13,6 +13,7 @@ router.post('/register', async (req, res) => {
     try {
         const {
             username, password, name, role,
+            passportNumber, nationality, validUntil,
             agencyType, officialEmail, officialPhone, jurisdiction,
             officerName, designation, officerId, geoRadius
         } = req.body;
@@ -54,7 +55,10 @@ router.post('/register', async (req, res) => {
                 username,
                 password: hashedPassword,
                 name,
-                role: 'TOURIST'
+                role: 'TOURIST',
+                passportNumber,
+                nationality,
+                validUntil
             });
             const savedUser = await newUser.save();
             return res.status(201).json({
@@ -110,7 +114,11 @@ router.post('/login', async (req, res) => {
                 photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
                 // Add extra fields for authority if needed
                 jurisdiction: user.jurisdiction,
-                officerName: user.officerName
+                officerName: user.officerName,
+                // Tourist Fields
+                passportNumber: user.passportNumber,
+                nationality: user.nationality,
+                validUntil: user.validUntil
             }
         });
 

@@ -90,25 +90,25 @@ export const EmergencyContacts: React.FC<EmergencyContactsProps> = ({ userId }) 
                     </div>
                 ))}
 
-                <div className="flex space-x-2 pt-2">
+                <div className="flex space-x-2 pt-2 items-center">
                     <input
                         type="text"
                         placeholder="Name"
                         value={newName}
                         onChange={e => setNewName(e.target.value)}
-                        className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-brand-accent"
+                        className="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-brand-accent"
                     />
                     <input
                         type="tel"
                         placeholder="Phone"
                         value={newPhone}
                         onChange={e => setNewPhone(e.target.value)}
-                        className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-brand-accent"
+                        className="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-brand-accent"
                     />
                     <button
                         onClick={addContact}
                         disabled={!newName || !newPhone}
-                        className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         <UserPlus className="w-5 h-5" />
                     </button>

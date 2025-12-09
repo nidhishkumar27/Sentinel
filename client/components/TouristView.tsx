@@ -22,9 +22,40 @@ interface TouristViewProps {
 export const TouristView: React.FC<TouristViewProps> = ({ user, location, realCoords, alerts, onPanic, onLogout, cityLocation, scannedZones, scannedSpots }) => {
     const [activeTab, setActiveTab] = useState<'status' | 'map' | 'id'>('status');
     const [dismissedAlertIds, setDismissedAlertIds] = useState<string[]>([]);
+    const [inactivityWarning, setInactivityWarning] = useState<string | null>(null);
 
     const activeAlert = alerts.find(a => a.userId === user.id && !dismissedAlertIds.includes(a.id));
     const isResolved = activeAlert?.status === 'RESOLVED';
+
+    const [lastMovementTime, setLastMovementTime] = useState(Date.now());
+
+    // Update movement time when location changes
+    React.useEffect(() => {
+        setLastMovementTime(Date.now());
+    }, [location.x, location.y, realCoords?.lat, realCoords?.lng]);
+
+    // Check for inactivity every second
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            const timeSinceLastMovement = Date.now() - lastMovementTime;
+            // 10 seconds threshold
+            if (timeSinceLastMovement > 10000) {
+                if (!activeAlert || activeAlert.status === 'RESOLVED') {
+                    handleInactivityAlert();
+                }
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [lastMovementTime, activeAlert]);
+
+    const handleInactivityAlert = React.useCallback(() => {
+        // Trigger if no active panic alert (or only resolved ones)
+        if (!activeAlert || activeAlert.status === 'RESOLVED') {
+            onPanic(); // Trigger default panic behavior
+            setInactivityWarning("⚠️ INACTIVITY DETECTED! Emergency contacts notified.");
+            setTimeout(() => setInactivityWarning(null), 8000); // Clear after 8s
+        }
+    }, [activeAlert, onPanic]);
 
     return (
         <div className="flex flex-col h-full bg-brand-900 relative">
@@ -52,6 +83,24 @@ export const TouristView: React.FC<TouristViewProps> = ({ user, location, realCo
                 </div>
             </div>
 
+            {/* Inactivity Warning Banner */}
+            {inactivityWarning && (
+                <div className="bg-amber-600 px-4 py-2 flex items-center justify-between animate-in slide-in-from-top duration-300 relative z-10 sticky top-[65px]">
+                    <div className="flex items-center space-x-2 text-white">
+                        <ShieldAlert className="w-5 h-5 animate-pulse" />
+                        <span className="text-sm font-bold">{inactivityWarning}</span>
+                    </div>
+                    <button
+                        onClick={() => setInactivityWarning(null)}
+                        className="text-white/80 hover:text-white"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Main Content Area - Scrollable */}
+
             {/* Main Content Area - Scrollable */}
             <div className="flex-1 overflow-y-auto pb-24">
 
@@ -60,14 +109,22 @@ export const TouristView: React.FC<TouristViewProps> = ({ user, location, realCo
                     <div className="p-4 space-y-6 max-w-md mx-auto">
 
 
+
                         <div className="text-center py-6">
-                            <h1 className="text-2xl font-light text-white mb-1">Good Evening, {user.name.split(' ')[0]}</h1>
+                            <h1 className="text-2xl font-light text-white mb-1">
+                                {(() => {
+                                    const hour = new Date().getHours();
+                                    if (hour < 12) return 'Good Morning';
+                                    if (hour < 17) return 'Good Afternoon';
+                                    return 'Good Evening';
+                                })()}, {user.name.split(' ')[0]}
+                            </h1>
                             <p className="text-slate-400 text-sm">System is active. You are in a verified safe zone.</p>
                         </div>
 
                         {/* WEATHER WIDGET */}
-                        {(cityLocation || location) && (
-                            <WeatherWidget location={cityLocation || { lat: location.x, lng: location.y }} />
+                        {(cityLocation || realCoords) && (
+                            <WeatherWidget location={cityLocation || realCoords!} />
                         )}
 
                         <RiskScanner />
@@ -213,6 +270,7 @@ export const TouristView: React.FC<TouristViewProps> = ({ user, location, realCo
                             alerts={alerts}
                             showHeatmap={true}
                             cityLocation={cityLocation}
+                            onInactivityAlert={handleInactivityAlert}
                         />
                     </div>
                 )}

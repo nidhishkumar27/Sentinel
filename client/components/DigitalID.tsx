@@ -77,6 +77,15 @@ export const DigitalID: React.FC<DigitalIDProps> = ({ user }) => {
             </div>
             <Activity className="w-4 h-4 text-slate-600" />
           </div>
+
+          {user.validUntil && (
+            <div className="absolute top-6 right-6 text-right">
+              <p className="text-[8px] text-slate-500 uppercase tracking-widest mb-0.5">Valid Until</p>
+              <p className="text-xs font-mono text-emerald-400 font-bold">
+                {new Date(user.validUntil).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
