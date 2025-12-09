@@ -86,6 +86,12 @@ cd ../client
 npm install
 ```
 
+Create a `.env` file in the `client` directory:
+```env
+VITE_GEMINI_API_KEY=your_gemini_api_key
+VITE_WEATHER_API_KEY=your_visual_crossing_weather_api_key
+```
+
 Start the development server:
 ```bash
 npm run dev
